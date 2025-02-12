@@ -1,5 +1,6 @@
 const express = require('express');
 const morgan = require('morgan');
+const { handleError } = require("./utils/errorHandler");
 
 const app = express();
 //const tourRouter = require('./routes/tourRouter');
@@ -14,6 +15,8 @@ if (process.env.NODE_ENV === 'development') {
 }
 app.use(express.json());
 app.use(express.static('public'));
+// Global Error Handling Middleware (MUST be last)
+app.use(handleError);
 // API Routes
 app.use("/api/content", contentRoutes);
 // app.use((req, res, next) => {

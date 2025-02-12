@@ -9,9 +9,11 @@ const {
 } = require("../controllers/contentController");
 
 router.get("/", getAllContent); // Get all content
-router.get("/:section", getContent); // Get specific section
+router.get("/:id", getContent); // Get specific section
 router.post("/", createContent); // Create new content
-router.put("/", updateContent); // Update existing content
-router.delete("/:section", deleteContent); // Delete single or all content
+router.put("/:id", updateContent); // Update existing content
+router.delete("/:id", deleteContent); // Delete single or all content
 
 module.exports = router;
+
+

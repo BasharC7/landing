@@ -1,124 +1,75 @@
+const mongoose = require("mongoose");
 const Content = require("../models/Content");
+const { AppError } = require("../utils/errorHandler");
+const catchAsync = require("../utils/catchAsync");
 
 // Get all content
-exports.getAllContent = async (req, res) => {
-  try {
-    const content = await Content.find().select('-__v');
-    res.status(200).json({
-      status: "success",
-      result: content.length,
-      data: { content },
-    });
-  } catch (error) {
-    res.status(500).json({ status: "error", message: error.message });
+exports.getAllContent = catchAsync(async (req, res, next) => {
+  const content = await Content.find().lean();
+  res.status(200).json({ status: "success", result: content.length, data: { content } });
+});
+
+// Get content by ID
+exports.getContent = catchAsync(async (req, res, next) => {
+  if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+    return next(new AppError("Invalid ID format", 400));
   }
-};
 
-// Get content by section
-exports.getContent = async (req, res) => {
-  try {
-    const content = await Content.findOne({ section: req.params.section }).select('-__v');
+  const content = await Content.findById(req.params.id).lean();
+  if (!content) return next(new AppError("Content not found", 404));
 
-    if (!content) {
-      return res.status(404).json({
-        status: "error",
-        message: "Content not found",
-      });
-    }
-
-    res.status(200).json({
-      status: "success",
-      result: 1,
-      data: { content },
-    });
-  } catch (error) {
-    res.status(500).json({ status: "error", message: error.message });
-  }
-};
+  res.status(200).json({ status: "success", result: 1, data: { content } });
+});
 
 // Create new content
-exports.createContent = async (req, res) => {
-  try {
-    const { section, data,image } = req.body;
+exports.createContent = catchAsync(async (req, res, next) => {
+  const { section, data, image } = req.body;
 
-    // Check if section already exists
-    const existingContent = await Content.findOne({ section });
-    if (existingContent) {
-      return res.status(400).json({
-        status: "error",
-        message: "Content for this section already exists. Use update instead.",
-      });
-    }
+  // Check if content with the same section already exists
+  const existingContent = await Content.findOne({ section }).lean();
+  if (existingContent) return next(new AppError("Content already exists. Use update instead.", 400));
 
-    const content = await Content.create({ section, data , image});
+  const content = await Content.create({ section, data, image });
 
-    res.status(201).json({
-      status: "success",
-      result: 1,
-      data: { content },
-    });
-  } catch (error) {
-    res.status(500).json({ status: "error", message: error.message });
+  res.status(201).json({ status: "success", result: 1, data: { content } });
+});
+
+// Update content by ID
+exports.updateContent = catchAsync(async (req, res, next) => {
+  if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+    return next(new AppError("Invalid ID format", 400));
   }
-};
 
-// Update existing content
-exports.updateContent = async (req, res) => {
-  try {
-    const { section, data } = req.body;
-
-    const content = await Content.findOneAndUpdate(
-      { section },
-      { data },
-      { new: true }
-    );
-
-    if (!content) {
-      return res.status(404).json({
-        status: "error",
-        message: "Content not found. Use create instead.",
-      });
-    }
-
-    res.status(200).json({
-      status: "success",
-      result: 1,
-      data: { content },
-    });
-  } catch (error) {
-    res.status(500).json({ status: "error", message: error.message });
+  const { section, data, image } = req.body;
+  if (!section && !data && !image) {
+    return next(new AppError("At least one field (section, data, image) must be provided", 400));
   }
-};
 
-// Delete content (single section or all)
-exports.deleteContent = async (req, res) => {
-  try {
-    const { section } = req.params;
+  const updatedFields = {};
+  if (section) updatedFields.section = section;
+  if (data) updatedFields.data = data;
+  if (image) updatedFields.image = image;
 
-    if (section === "all") {
-      await Content.deleteMany({});
-      return res.status(200).json({
-        status: "success",
-        result: 0,
-        message: "All content deleted successfully",
-      });
-    }
+  const content = await Content.findByIdAndUpdate(req.params.id, { $set: updatedFields }, { new: true, lean: true });
 
-    const content = await Content.findOneAndDelete({ section });
+  if (!content) return next(new AppError("Content not found or invalid ID.", 404));
 
-    if (!content) {
-      return res.status(404).json({
-        status: "error",
-        message: "Content not found",
-      });
-    }
+  res.status(200).json({ status: "success", result: 1, data: { content } });
+});
 
-    res.status(200).json({
-      status: "success",
-      result: 1,
-      message: "Content deleted successfully",
-    });
-  } catch (error) {
-    res.status(500).json({ status: "error", message: error.message });
+// Delete content by ID or delete all
+exports.deleteContent = catchAsync(async (req, res, next) => {
+  if (req.params.id === "all") {
+    await Content.deleteMany({});
+    return res.status(204).json({ status: "success", message: "All content deleted successfully" });
   }
-};
+
+  if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+    return next(new AppError("Invalid ID format", 400));
+  }
+
+  const content = await Content.findByIdAndDelete(req.params.id);
+  if (!content) return next(new AppError("Content not found", 404));
+
+  res.status(200).json({ status: "success", message: "Content deleted successfully" });
+});
